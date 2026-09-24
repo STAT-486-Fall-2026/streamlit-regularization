@@ -65,12 +65,13 @@ def generate_polynomial_data(
 
     rng = np.random.default_rng(seed)
     degrees = np.arange(true_degree + 1)
-    coefficient_scales = 1.25 / np.sqrt(degrees + 1)
+    # Give higher-order terms more influence so the generated curves visibly wiggle.
+    coefficient_scales = 2.0 / np.sqrt(degrees + 1)
     coefficients = rng.normal(0.0, coefficient_scales).astype(float)
 
     # Keep the requested degree genuinely present and visually consequential.
     leading_sign = 1.0 if coefficients[-1] >= 0 else -1.0
-    coefficients[-1] = leading_sign * max(abs(coefficients[-1]), 0.8)
+    coefficients[-1] = leading_sign * max(abs(coefficients[-1]), 1.2)
 
     x_train = rng.uniform(-1.0, 1.0, n_train)
     x_test = rng.uniform(-1.0, 1.0, n_test)

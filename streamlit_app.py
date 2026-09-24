@@ -8,7 +8,6 @@ import streamlit as st
 from regression import (
     Regularization,
     fit_polynomial_model,
-    format_polynomial,
     generate_polynomial_data,
 )
 
@@ -47,6 +46,58 @@ def format_lambda(value: float) -> str:
     if value < 0.1:
         return f"{value:.3f}".rstrip("0")
     return f"{value:g}"
+
+
+def human_readable_bounds(values: np.ndarray, target_ticks: int = 6) -> list[float]:
+    """Return rounded bounds that produce readable axis tick labels."""
+    finite_values = values[np.isfinite(values)]
+    minimum = float(finite_values.min())
+    maximum = float(finite_values.max())
+    span = maximum - minimum
+
+    if span == 0:
+        padding = max(abs(minimum) * 0.1, 1.0)
+        minimum -= padding
+        maximum += padding
+        span = maximum - minimum
+
+    rough_step = span / target_ticks
+    magnitude = 10 ** np.floor(np.log10(rough_step))
+    normalized_step = rough_step / magnitude
+    if normalized_step <= 1:
+        step = magnitude
+    elif normalized_step <= 2:
+        step = 2 * magnitude
+    elif normalized_step <= 5:
+        step = 5 * magnitude
+    else:
+        step = 10 * magnitude
+
+    return [
+        float(np.floor(minimum / step) * step),
+        float(np.ceil(maximum / step) * step),
+    ]
+
+
+def format_equation_latex(
+    label: str,
+    intercept: float,
+    coefficients: np.ndarray,
+    terms_per_line: int = 4,
+) -> str:
+    """Format a polynomial as a readable, line-wrapped LaTeX equation."""
+    terms = [f"{intercept:.3f}"]
+    terms.extend(
+        f"{'+' if coefficient >= 0 else '-'} {abs(coefficient):.3f}x^{{{degree}}}"
+        for degree, coefficient in enumerate(coefficients, start=1)
+        if abs(coefficient) >= 0.0005
+    )
+    lines = [f"{label} = {terms[0]}"]
+    lines.extend(
+        "&\\quad " + " ".join(terms[start : start + terms_per_line])
+        for start in range(1, len(terms), terms_per_line)
+    )
+    return r"\begin{aligned}" + r"\\".join(lines) + r"\end{aligned}"
 
 
 def interpretation(
@@ -156,7 +207,7 @@ data = generate_polynomial_data(
     noise_std=noise_std,
     seed=int(seed),
 )
-curve_x = np.linspace(-1.05, 1.05, 500)
+curve_x = np.linspace(-1.0, 1.0, 500)
 result = fit_polynomial_model(
     data=data,
     model_degree=model_degree,
@@ -196,13 +247,30 @@ true_curve = pd.DataFrame(
 fitted_curve = pd.DataFrame(
     {"x": curve_x, "y": result.curve_predictions, "curve": "Fitted model"}
 )
+y_domain = human_readable_bounds(
+    np.concatenate(
+        [
+            point_frame["y"].to_numpy(),
+            true_curve["y"].to_numpy(),
+            fitted_curve["y"].to_numpy(),
+        ]
+    )
+)
 
 points = (
     alt.Chart(point_frame)
     .mark_circle(size=62, opacity=0.72)
     .encode(
-        x=alt.X("x:Q", title="Predictor x"),
-        y=alt.Y("y:Q", title="Response y"),
+        x=alt.X(
+            "x:Q",
+            title="Predictor x",
+            scale=alt.Scale(domain=[-1, 1], nice=False),
+        ),
+        y=alt.Y(
+            "y:Q",
+            title="Response y",
+            scale=alt.Scale(domain=y_domain, nice=False),
+        ),
         color=alt.Color(
             "sample:N",
             title="Observations",
@@ -221,8 +289,8 @@ truth_line = (
     alt.Chart(true_curve)
     .mark_line(color="#6B7280", strokeWidth=3, strokeDash=[7, 5])
     .encode(
-        x="x:Q",
-        y="y:Q",
+        x=alt.X("x:Q", scale=alt.Scale(domain=[-1, 1], nice=False)),
+        y=alt.Y("y:Q", scale=alt.Scale(domain=y_domain, nice=False)),
         tooltip=[
             alt.Tooltip("curve:N", title="Curve"),
             alt.Tooltip("x:Q", format=".3f"),
@@ -234,8 +302,8 @@ fit_line = (
     alt.Chart(fitted_curve)
     .mark_line(color="#2563EB", strokeWidth=4)
     .encode(
-        x="x:Q",
-        y="y:Q",
+        x=alt.X("x:Q", scale=alt.Scale(domain=[-1, 1], nice=False)),
+        y=alt.Y("y:Q", scale=alt.Scale(domain=y_domain, nice=False)),
         tooltip=[
             alt.Tooltip("curve:N", title="Curve"),
             alt.Tooltip("x:Q", format=".3f"),
@@ -244,16 +312,35 @@ fit_line = (
     )
 )
 
-with st.container(border=True):
-    st.subheader("Observed data and fitted curve", icon=":material/monitoring:")
+chart_col, equation_col = st.columns([2, 1], gap="large", vertical_alignment="top")
+with chart_col:
+    with st.container(border=True):
+        st.subheader("Observed data and fitted curve", icon=":material/monitoring:")
     st.caption("Blue: fitted model · dashed gray: true function · red/green: observations")
-    fit_chart = (
-        (truth_line + fit_line + points)
-        .properties(height=470)
-        .configure_axis(gridColor="#E5E7EB", gridOpacity=0.45)
-        .interactive()
-    )
-    st.altair_chart(fit_chart, key="fit_chart")
+        fit_chart = (
+            (truth_line + fit_line + points)
+            .properties(width=600, height=600)
+            .configure_axis(gridColor="#E5E7EB", gridOpacity=0.45)
+            .interactive()
+        )
+        st.altair_chart(fit_chart, width="content", key="fit_chart")
+
+with equation_col:
+    with st.container(border=True, height=600):
+        st.subheader("Model equations", icon=":material/functions:")
+        st.caption("Coefficients are rounded to three decimals; tiny terms are omitted.")
+        st.markdown("**True underlying polynomial**")
+        st.latex(
+            format_equation_latex(
+                "y",
+                float(data.true_coefficients[0]),
+                data.true_coefficients[1:],
+            )
+        )
+        st.markdown("**Fitted polynomial**")
+        st.latex(
+            format_equation_latex(r"\hat{y}", result.intercept, result.raw_coefficients)
+        )
 
 coefficient_frame = pd.DataFrame(
     {
@@ -313,9 +400,7 @@ with coefficient_col:
         )
         st.altair_chart(coefficient_chart, key="coefficient_chart")
 
-with st.expander("Model details and penalty definitions", icon=":material/function:"):
-    st.markdown("**Fitted equation**")
-    st.code(format_polynomial(result.intercept, result.raw_coefficients), language=None)
+with st.expander("Penalty definitions and model details", icon=":material/function:"):
     st.markdown(
         r"All polynomial features are standardized before fitting. The common loss scale is "
         r"$\frac{1}{2n}\sum_i(y_i-\hat y_i)^2$. LASSO adds "
