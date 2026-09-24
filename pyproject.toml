@@ -1,0 +1,22 @@
+[project]
+name = "polynomial-regularization"
+version = "0.1.0"
+description = "Interactive Streamlit lab for LASSO, Ridge, and elastic-net polynomial regression"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "altair>=5.0",
+    "numpy>=2.0",
+    "pandas>=2.2",
+    "scikit-learn>=1.7",
+    "streamlit>=1.57",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
