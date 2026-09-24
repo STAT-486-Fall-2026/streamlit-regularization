@@ -314,16 +314,15 @@ fit_line = (
 
 chart_col, equation_col = st.columns([2, 1], gap="large", vertical_alignment="top")
 with chart_col:
-    with st.container(border=True):
-        st.subheader("Observed data and fitted curve", icon=":material/monitoring:")
+    st.subheader("Observed data and fitted curve", icon=":material/monitoring:")
     st.caption("Blue: fitted model · dashed gray: true function · red/green: observations")
-        fit_chart = (
-            (truth_line + fit_line + points)
-            .properties(width=600, height=600)
-            .configure_axis(gridColor="#E5E7EB", gridOpacity=0.45)
-            .interactive()
-        )
-        st.altair_chart(fit_chart, width="content", key="fit_chart")
+    fit_chart = (
+        (truth_line + fit_line + points)
+        .properties(width=600, height=600)
+        .configure_axis(gridColor="#E5E7EB", gridOpacity=0.45)
+        .interactive()
+    )
+    st.altair_chart(fit_chart, width="content", key="fit_chart")
 
 with equation_col:
     with st.container(border=True, height=600):
